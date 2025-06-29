@@ -22,6 +22,7 @@ public class UserController {
     public String test(){
         return "Working";
     }
+
     @PostMapping("/admin-login")
     @PreAuthorize("hasRole('admin')")
     public ResponseEntity<StandardResponse> adminLogin(@RequestBody UserLoginRequest request){
@@ -161,13 +162,13 @@ public class UserController {
     }
 
     @PreAuthorize("hasRole('admin')")
-    @DeleteMapping("/{userId}")
+    @DeleteMapping("/delete-user/{userId}")
     public ResponseEntity<StandardResponse> deleteUser(@PathVariable String userId) {
         return new ResponseEntity<>(
                 StandardResponse.builder()
                         .code(200)
                         .message("User deleted Success")
-                        .data(null)
+                        .data(userService.deleteUser(userId))
                         .build(),
                 HttpStatus.NO_CONTENT
         );

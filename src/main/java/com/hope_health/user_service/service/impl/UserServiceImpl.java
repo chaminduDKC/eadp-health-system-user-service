@@ -229,6 +229,39 @@ public class UserServiceImpl implements UserService {
         return false;
     }
 
+    @Override
+    public Boolean deleteUser(String userId) {
+        Keycloak keycloak = null;
+
+        UserRepresentation existingUser = null;
+        keycloak = keycloakUtil.getKeycloakInstance();
+
+        UserEntity user = userRepo.findById(userId).orElseThrow(()-> new RuntimeException("User couldn't found with given id"));
+
+        String userEmail = user.getEmail();
+
+        try{
+            existingUser = keycloak.realm(realm).users().search(userEmail).stream().findFirst().orElse(null);
+        }catch (WebApplicationException e) {
+            throw new InternalServerException("Failed to connect to Keycloak: " + e.getMessage());
+        } catch (Exception e) {
+            throw new InternalServerException("Unexpected error during user lookup: " + e.getMessage());
+        }
+        if(existingUser != null){
+            keycloak.realm(realm).users().delete(existingUser.getId());
+
+            Optional<UserEntity> userEntity = userRepo.findByEmail(userEmail);
+            Optional<Otp> userOtp = otpRepo.findByUserUserId(userId);
+
+            userRepo.deleteById(userId);
+            String otpId = userOtp.get().getOtpId();
+            otpRepo.deleteById(otpId);
+            return true;
+        }
+
+        return false;
+    }
+
     private UserResponseDto createUser(UserRequestDto requestDto, String role) {
 
         String userId = "";
@@ -240,6 +273,7 @@ public class UserServiceImpl implements UserService {
         try {
             existingUser = keycloak.realm(realm).users().search(requestDto.getEmail()).stream()
                     .findFirst().orElse(null);
+            System.out.println(existingUser);
 
         } catch (WebApplicationException e) {
             throw new InternalServerException("Failed to connect to Keycloak: " + e.getMessage());
