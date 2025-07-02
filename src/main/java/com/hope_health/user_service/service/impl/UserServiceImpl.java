@@ -1,7 +1,9 @@
 package com.hope_health.user_service.service.impl;
 import com.hope_health.user_service.config.KeycloakSecurityUtil;
+import com.hope_health.user_service.config.WebClientConfig;
 import com.hope_health.user_service.dto.request.UserLoginRequest;
 import com.hope_health.user_service.dto.request.UserRequestDto;
+import com.hope_health.user_service.dto.request.UserUpdateRequest;
 import com.hope_health.user_service.dto.response.UserResponseDto;
 import com.hope_health.user_service.entity.Otp;
 import com.hope_health.user_service.entity.UserEntity;
@@ -11,6 +13,7 @@ import com.hope_health.user_service.repo.UserRepo;
 import com.hope_health.user_service.service.UserService;
 import com.hope_health.user_service.util.EmailService;
 import com.hope_health.user_service.util.OtpGenerator;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +42,7 @@ public class UserServiceImpl implements UserService {
     private final UserRepo userRepo;
     private final OtpRepo otpRepo;
     private final OtpGenerator otpGenerator;
+    private final WebClientConfig webClientConfig;
 
     @Value("${keycloak.config.realm}")
     private String realm;
@@ -187,7 +191,7 @@ public class UserServiceImpl implements UserService {
             Otp otp = user.getOtp();
             if(otp.getAttempts()>= 5){
                 String code = otpGenerator.generateOtp(4);
-                emailService.sendEmailVerifyMail(email, user.getFirstName(), code);
+                emailService.sendEmailVerifyMail(email, user.getName(), code);
 
                 otp.setCreatedDate(new Date());
                 otp.setCode(code);
@@ -225,8 +229,50 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public boolean updateUser(String userId) {
-        return false;
+    public void updateUser(String userId, UserUpdateRequest request) {
+       Optional<UserEntity> userEntity = userRepo.findById(userId);
+        System.out.println("user entity "+userEntity);
+       if(userEntity.isPresent()){
+           UserEntity user = userEntity.get();
+           System.out.println("user "+user);
+           user.setName(request.getName());
+           user.setEmail(request.getEmail());
+           // keycloak password updating
+           // manage keycloak user id
+
+           Keycloak keycloak = null;
+
+           UserRepresentation existingUser = null;
+           keycloak = keycloakUtil.getKeycloakInstance();
+           try {
+               existingUser = keycloak.realm(realm).users().get(userId).toRepresentation();
+               System.out.println(existingUser);
+
+           } catch (WebApplicationException e) {
+               throw new InternalServerException("Failed to connect to Keycloak: " + e.getMessage());
+           } catch (Exception e) {
+               throw new InternalServerException("Unexpected error during user lookup: " + e.getMessage());
+           }
+          if(existingUser != null){
+              existingUser.setLastName(request.getName());
+              existingUser.setFirstName(request.getName());
+              existingUser.setEnabled(true);
+              existingUser.setEmail(request.getEmail());
+              existingUser.setEmailVerified(true);
+
+              existingUser.setCredentials(existingUser.getCredentials());
+
+              keycloak.realm(realm).users().get(userId).update(existingUser);
+              System.out.println("Update completed");
+          }
+          else {
+              throw new EntityNotFoundException("User could not be found in keycloak");
+          }
+
+           userRepo.save(user);
+       } else {
+           throw new EntryNotFoundException("user not found with id in db " + userId);
+       }
     }
 
     @Override
@@ -306,7 +352,11 @@ public class UserServiceImpl implements UserService {
             }
         }
 
-        UserRepresentation userRep = mapUserRep(requestDto);
+        boolean activeStat = false;
+        if(role.equalsIgnoreCase("doctor")){
+            activeStat = true;
+        }
+        UserRepresentation userRep = mapUserRep(requestDto, activeStat);
         Response res = keycloak.realm(realm).users().create(userRep);
         if (res.getStatus() == Response.Status.CREATED.getStatusCode()) {
             RoleRepresentation userRole = keycloak.realm(realm).roles().get(role).toRepresentation();
@@ -314,14 +364,13 @@ public class UserServiceImpl implements UserService {
             keycloak.realm(realm).users().get(userId).roles().realmLevel().add(Arrays.asList(userRole));
             UserEntity createdSystemUser = UserEntity.builder()
                     .userId(userId)
-                    .activeState(false)
+                    .activeState(activeStat)
                     .email(requestDto.getEmail())
-                    .firstName(requestDto.getFirstName())
-                    .lastName(requestDto.getLastName())
+                    .name(requestDto.getName())
                     .isAccountNonExpired(true)
-                    .isEmailVerified(false)
+                    .isEmailVerified(activeStat)
                     .isAccountNonLocked(true)
-                    .isEnabled(false)
+                    .isEnabled(activeStat)
                     .createdDate(new Date())
                     .build();
             UserEntity savedUser = userRepo.save(createdSystemUser);
@@ -329,26 +378,49 @@ public class UserServiceImpl implements UserService {
                     .otpId(UUID.randomUUID().toString())
                     .code(otpGenerator.generateOtp(4))
                     .createdDate(new Date())
-                    .isVerified(false)
+                    .isVerified(activeStat)
                     .attempts(0)
                     .user(savedUser)
                     .build();
             otpRepo.save(otp);
-            emailService.sendWelcomeMail(requestDto.getEmail(), requestDto.getFirstName());
-            emailService.sendEmailVerifyMail(requestDto.getEmail(), requestDto.getFirstName(), otp.getCode());
+            emailService.sendWelcomeMail(requestDto.getEmail(), requestDto.getName());
+            emailService.sendEmailVerifyMail(requestDto.getEmail(), requestDto.getName(), otp.getCode());
+
+
+            // if it's a patient, we use inter-service call to patient service to save particular patient
+            // if it's a doctor we call doctor service through frontend
+
+            if(!activeStat){
+                try{
+
+                    requestDto.setUserId(savedUser.getUserId());
+                    System.out.println("web client");
+                    webClientConfig.webClient()
+                            .post()
+                            .uri("http://localhost:9092/api/patients/register-patient")
+                            .bodyValue(requestDto)
+                            .retrieve()
+                            .bodyToMono(UserRequestDto.class)
+                            .block();
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+
+            }
+
             return toResponse(createdSystemUser);
         }
         throw new BadRequestException("Something went wrong with creating user. Please try again");
     }
 
-    private UserRepresentation mapUserRep(UserRequestDto user) {
+    private UserRepresentation mapUserRep(UserRequestDto user, boolean activeStat) {
         UserRepresentation userRep = new UserRepresentation();
         userRep.setUsername(user.getEmail());
-        userRep.setFirstName(user.getFirstName());
-        userRep.setLastName(user.getLastName());
+        userRep.setFirstName(user.getName());
+        userRep.setLastName(user.getName());
         userRep.setEmail(user.getEmail());
-        userRep.setEnabled(false);
-        userRep.setEmailVerified(false);
+        userRep.setEnabled(activeStat);
+        userRep.setEmailVerified(activeStat);
         List<CredentialRepresentation> creds = new ArrayList<>();
         CredentialRepresentation cred = new CredentialRepresentation();
         cred.setTemporary(false);
@@ -360,8 +432,7 @@ public class UserServiceImpl implements UserService {
 
     private UserResponseDto toResponse(UserEntity entity){
         return UserResponseDto.builder()
-                .FirstName(entity.getFirstName())
-                .lastName(entity.getLastName())
+                .name(entity.getName())
                 .email(entity.getEmail())
                 .userId(entity.getUserId())
                 .isEmailVerified(entity.getIsEmailVerified())

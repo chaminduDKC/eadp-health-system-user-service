@@ -2,6 +2,7 @@ package com.hope_health.user_service.service;
 
 import com.hope_health.user_service.dto.request.UserLoginRequest;
 import com.hope_health.user_service.dto.request.UserRequestDto;
+import com.hope_health.user_service.dto.request.UserUpdateRequest;
 import com.hope_health.user_service.dto.response.UserResponseDto;
 import org.springframework.stereotype.Service;
 
@@ -18,7 +19,7 @@ public interface UserService {
 
     Object getUserById(String userId);
 
-    boolean updateUser(String userId);
+    void updateUser(String userId, UserUpdateRequest request);
 
     Boolean deleteUser(String userId);
 }

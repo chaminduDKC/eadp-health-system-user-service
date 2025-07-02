@@ -2,6 +2,7 @@ package com.hope_health.user_service.controller;
 
 import com.hope_health.user_service.dto.request.UserLoginRequest;
 import com.hope_health.user_service.dto.request.UserRequestDto;
+import com.hope_health.user_service.dto.request.UserUpdateRequest;
 import com.hope_health.user_service.service.UserService;
 import com.hope_health.user_service.util.StandardResponse;
 import lombok.RequiredArgsConstructor;
@@ -149,13 +150,15 @@ public class UserController {
         );
     }
 
-    @PutMapping("/{userId}")
-    public ResponseEntity<StandardResponse> updateUser(@PathVariable String userId) {
+    @PutMapping("/update-user/{userId}")
+    public ResponseEntity<StandardResponse> updateUser(@PathVariable String userId, @RequestBody UserUpdateRequest request) {
+        System.out.println(request);
+        userService.updateUser(userId, request);
         return new ResponseEntity<>(
                 StandardResponse.builder()
                         .code(200)
                         .message("User updated Success")
-                        .data(userService.updateUser(userId))
+                        .data(null)
                         .build(),
                 HttpStatus.OK
         );

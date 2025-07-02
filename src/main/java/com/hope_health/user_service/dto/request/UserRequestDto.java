@@ -10,9 +10,9 @@ import java.util.Date;
 @Builder
 public class UserRequestDto {
     private String email;
-    private String firstName;
-    private String lastName;
+    private String name;
     private String password;
+    private String userId;
     private Date createdDate;
     private String role;
 }

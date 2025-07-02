@@ -8,8 +8,7 @@ import lombok.*;
 @Builder
 public class UserResponseDto {
     private String userId;
-    private String FirstName;
-    private String lastName;
+    private String name;
     private String email;
     private boolean isEmailVerified;
 

@@ -23,11 +23,7 @@ public class UserEntity {
     @Column(name = "email", unique = true, length = 250, nullable = false)
     private String email;
 
-    @Column(name = "first_name", length = 45, nullable = false)
-    private String firstName;
-
-    @Column(name = "last_name", length = 45, nullable = false)
-    private String lastName;
+    private String name;
 
     @Column(name = "is_account_non_expired", columnDefinition = "TINYINT", nullable = false)
     private Boolean isAccountNonExpired;
@@ -47,4 +43,5 @@ public class UserEntity {
 
     @OneToOne(mappedBy = "user", fetch = FetchType.EAGER, cascade = CascadeType.REMOVE)
     private Otp otp;
+
 }
