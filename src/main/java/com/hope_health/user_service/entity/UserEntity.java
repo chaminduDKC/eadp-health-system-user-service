@@ -44,4 +44,6 @@ public class UserEntity {
     @OneToOne(mappedBy = "user", fetch = FetchType.EAGER, cascade = CascadeType.REMOVE)
     private Otp otp;
 
+    private String role;
+
 }

@@ -42,6 +42,7 @@ public class UserController {
 
     @PostMapping("/register-patient")
     public ResponseEntity<StandardResponse> registerPatient(@RequestBody UserRequestDto request){
+        System.out.println(request);
         return new ResponseEntity<>(
                 StandardResponse.builder()
                         .code(201)
@@ -167,11 +168,12 @@ public class UserController {
     @PreAuthorize("hasRole('admin')")
     @DeleteMapping("/delete-user/{userId}")
     public ResponseEntity<StandardResponse> deleteUser(@PathVariable String userId) {
+        userService.deleteUser(userId);
         return new ResponseEntity<>(
                 StandardResponse.builder()
                         .code(200)
                         .message("User deleted Success")
-                        .data(userService.deleteUser(userId))
+                        .data("delete with id "+ userId)
                         .build(),
                 HttpStatus.NO_CONTENT
         );

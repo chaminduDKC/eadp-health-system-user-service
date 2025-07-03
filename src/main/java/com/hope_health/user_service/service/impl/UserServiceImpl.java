@@ -246,7 +246,7 @@ public class UserServiceImpl implements UserService {
            keycloak = keycloakUtil.getKeycloakInstance();
            try {
                existingUser = keycloak.realm(realm).users().get(userId).toRepresentation();
-               System.out.println(existingUser);
+               System.out.println("k user "+existingUser);
 
            } catch (WebApplicationException e) {
                throw new InternalServerException("Failed to connect to Keycloak: " + e.getMessage());
@@ -254,16 +254,44 @@ public class UserServiceImpl implements UserService {
                throw new InternalServerException("Unexpected error during user lookup: " + e.getMessage());
            }
           if(existingUser != null){
+              System.out.println("Keycloak user updating");
               existingUser.setLastName(request.getName());
+              System.out.println(request.getEmail());
+              //existingUser.setUsername(request.getName());
               existingUser.setFirstName(request.getName());
               existingUser.setEnabled(true);
               existingUser.setEmail(request.getEmail());
               existingUser.setEmailVerified(true);
-
               existingUser.setCredentials(existingUser.getCredentials());
+              System.out.println("to update creds");
+
+                if(request.getPassword() != null && !request.getPassword().isEmpty()){
+                    List<CredentialRepresentation> creds = new ArrayList<>();
+                    CredentialRepresentation cred = new CredentialRepresentation();
+                    cred.setTemporary(false);
+                    cred.setValue(request.getPassword());
+                    creds.add(cred);
+                    existingUser.setCredentials(creds);
+                }
 
               keycloak.realm(realm).users().get(userId).update(existingUser);
               System.out.println("Update completed");
+
+              String userRole = user.getRole();
+                if(userRole.equalsIgnoreCase("patient")){
+                    try {
+                        webClientConfig.webClient()
+                                .put()
+                                .uri("http://localhost:9092/api/patients/update-patient/{userId}", user.getUserId())
+                                .bodyValue(request)
+                                .retrieve()
+                                .bodyToMono(Void.class)
+                                .block();
+                    } catch (Exception e) {
+                        throw new RuntimeException("Failed to update patient in patient service");
+                    }
+
+                }
           }
           else {
               throw new EntityNotFoundException("User could not be found in keycloak");
@@ -276,7 +304,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public Boolean deleteUser(String userId) {
+    public void deleteUser(String userId) {
         Keycloak keycloak = null;
 
         UserRepresentation existingUser = null;
@@ -302,10 +330,36 @@ public class UserServiceImpl implements UserService {
             userRepo.deleteById(userId);
             String otpId = userOtp.get().getOtpId();
             otpRepo.deleteById(otpId);
-            return true;
+
+            // check role and according to the role create webclient call
+            if(user.getRole().equalsIgnoreCase("patient")){
+                try{
+                    var response = webClientConfig.webClient()
+                            .delete()
+                            .uri("http://localhost:9092/api/patients/delete-patient/{patientId}", user.getUserId())
+                            .retrieve()
+                            .bodyToMono(Void.class)
+                            .block();
+
+                    System.out.println(response);
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to delete patient from patient service");
+                }
+            } else if(user.getRole().equalsIgnoreCase("doctor")){
+                try{
+                    webClientConfig.webClient()
+                            .delete()
+                            .uri("http://localhost:9091/api/doctors/delete-doctor/{doctorId}", user.getUserId())
+                            .retrieve()
+                            .bodyToMono(Void.class)
+                            .block();
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to delete doctor from doctor service");
+                }
+            }
+
         }
 
-        return false;
     }
 
     private UserResponseDto createUser(UserRequestDto requestDto, String role) {
@@ -372,6 +426,7 @@ public class UserServiceImpl implements UserService {
                     .isAccountNonLocked(true)
                     .isEnabled(activeStat)
                     .createdDate(new Date())
+                    .role(role)
                     .build();
             UserEntity savedUser = userRepo.save(createdSystemUser);
             Otp otp = Otp.builder()
@@ -393,6 +448,7 @@ public class UserServiceImpl implements UserService {
             if(!activeStat){
                 try{
 
+                    System.out.println(requestDto);
                     requestDto.setUserId(savedUser.getUserId());
                     System.out.println("web client");
                     webClientConfig.webClient()

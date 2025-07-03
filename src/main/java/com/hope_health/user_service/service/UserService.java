@@ -21,5 +21,5 @@ public interface UserService {
 
     void updateUser(String userId, UserUpdateRequest request);
 
-    Boolean deleteUser(String userId);
+    void deleteUser(String userId);
 }
