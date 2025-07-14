@@ -310,7 +310,7 @@ public class UserServiceImpl implements UserService {
         UserRepresentation existingUser = null;
         keycloak = keycloakUtil.getKeycloakInstance();
 
-        UserEntity user = userRepo.findById(userId).orElseThrow(()-> new RuntimeException("User couldn't found with given id"));
+        UserEntity user = userRepo.findById(userId).orElseThrow(()-> new RuntimeException("User couldn't found with given id "+ userId));
 
         String userEmail = user.getEmail();
 
@@ -336,7 +336,7 @@ public class UserServiceImpl implements UserService {
                 try{
                     var response = webClientConfig.webClient()
                             .delete()
-                            .uri("http://localhost:9092/api/patients/delete-patient/{patientId}", user.getUserId())
+                            .uri("http://localhost:9092/api/patients/delete-patient/{userId}", user.getUserId())
                             .retrieve()
                             .bodyToMono(Void.class)
                             .block();
@@ -349,7 +349,7 @@ public class UserServiceImpl implements UserService {
                 try{
                     webClientConfig.webClient()
                             .delete()
-                            .uri("http://localhost:9091/api/doctors/delete-doctor/{doctorId}", user.getUserId())
+                            .uri("http://localhost:9091/api/doctors/delete-doctor/{userId}", user.getUserId())
                             .retrieve()
                             .bodyToMono(Void.class)
                             .block();

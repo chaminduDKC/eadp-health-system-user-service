@@ -168,6 +168,7 @@ public class UserController {
     @PreAuthorize("hasRole('admin')")
     @DeleteMapping("/delete-user/{userId}")
     public ResponseEntity<StandardResponse> deleteUser(@PathVariable String userId) {
+        System.out.println("delete called");
         userService.deleteUser(userId);
         return new ResponseEntity<>(
                 StandardResponse.builder()
