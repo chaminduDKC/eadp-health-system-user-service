@@ -67,7 +67,8 @@ public class UserController {
     }
 
     @PostMapping("/verify-user")
-    public ResponseEntity<StandardResponse> verifyUser(@RequestParam String email, String otp){
+    public ResponseEntity<StandardResponse> verifyUser(@RequestParam String email,@RequestParam String otp){
+        System.out.println("Verify api "+ email+ otp);
         boolean isVerified = userService.verifyUser(email, otp);
         if(isVerified){
             return new ResponseEntity<>(
@@ -138,7 +139,7 @@ public class UserController {
         );
     }
 
-    @PreAuthorize("hasRole('doctor')")
+//    @PreAuthorize("hasRole('doctor')")
     @GetMapping("/{userId}")
     public ResponseEntity<StandardResponse> getUserById(@PathVariable String userId) {
         return new ResponseEntity<>(
@@ -176,7 +177,7 @@ public class UserController {
                         .message("User deleted Success")
                         .data("delete with id "+ userId)
                         .build(),
-                HttpStatus.NO_CONTENT
+                HttpStatus.OK
         );
     }
 
@@ -209,6 +210,30 @@ public class UserController {
         );
     }
 
+    @PutMapping("/update-password/{userId}")
+    public ResponseEntity<StandardResponse> updatePassword(@RequestParam String password, @RequestParam String role, @PathVariable String userId){
+        return new ResponseEntity<>(
+                StandardResponse.builder()
+                        .code(200)
+                        .message("User updated password")
+                        .data(userService.updatePassword(userId, password, role))
+                        .build(),
+                HttpStatus.OK
+        );
+    }
+
+    @PutMapping("/update-email/{userId}")
+    public ResponseEntity<StandardResponse> updateEmail(@RequestParam String email, @RequestParam String role, @PathVariable String userId){
+        return new ResponseEntity<>(
+                StandardResponse.builder()
+                        .code(200)
+                        .message("email updated password")
+                        .data(userService.updateEmail(userId, email, role))
+                        .build(),
+                HttpStatus.OK
+        );
+    }
+
     // Self Profile
     @GetMapping("/me")
     public ResponseEntity<StandardResponse> getCurrentUser(Authentication auth) {
@@ -220,6 +245,80 @@ public class UserController {
                         .build(),
                 HttpStatus.NO_CONTENT
         );
+    }
+
+    @PostMapping("/visitor/forgot-password-email-verify")
+    public ResponseEntity<StandardResponse> forgotPasswordEmailVerify(@RequestParam String email) {
+        boolean isVerified = userService.forgotPasswordEmailVerify(email);
+        if (isVerified) {
+            return new ResponseEntity<>(
+                    StandardResponse.builder()
+                            .code(200)
+                            .message("Email verification successful")
+                            .data(null)
+                            .build(),
+                    HttpStatus.OK
+            );
+        } else {
+            return new ResponseEntity<>(
+                    StandardResponse.builder()
+                            .code(400)
+                            .message("Email verification failed")
+                            .data(null)
+                            .build(),
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+    }
+
+    @PostMapping("/visitor/verify-reset-password")
+    public ResponseEntity<StandardResponse> verifyResetPassword(@RequestParam String email, @RequestParam String otp) {
+        boolean isVerified = userService.verifyResetPassword(email, otp);
+        if (isVerified) {
+            return new ResponseEntity<>(
+                    StandardResponse.builder()
+                            .code(200)
+                            .message("OTP verification successful")
+                            .data(null)
+                            .build(),
+                    HttpStatus.OK
+            );
+        } else {
+            return new ResponseEntity<>(
+                    StandardResponse.builder()
+                            .code(400)
+                            .message("OTP verification failed")
+                            .data(null)
+                            .build(),
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+
+    }
+
+    @PutMapping("/visitor/set-new-password")
+    public ResponseEntity<StandardResponse> setNewPassword(@RequestParam String email, @RequestParam String newPassword) {
+        System.out.println("Coming "+ newPassword);
+        boolean isUpdated = userService.setNewPassword(email, newPassword);
+        if (isUpdated) {
+            return new ResponseEntity<>(
+                    StandardResponse.builder()
+                            .code(200)
+                            .message("Password updated successfully")
+                            .data(null)
+                            .build(),
+                    HttpStatus.OK
+            );
+        } else {
+            return new ResponseEntity<>(
+                    StandardResponse.builder()
+                            .code(400)
+                            .message("Failed to update password")
+                            .data(null)
+                            .build(),
+                    HttpStatus.BAD_REQUEST
+            );
+        }
     }
 
     //================================================================

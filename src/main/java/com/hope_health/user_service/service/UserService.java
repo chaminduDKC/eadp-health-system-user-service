@@ -22,4 +22,14 @@ public interface UserService {
     void updateUser(String userId, UserUpdateRequest request);
 
     void deleteUser(String userId);
+
+    Boolean updatePassword(String userId, String password, String role);
+
+    Boolean updateEmail(String userId, String email, String role);
+
+    boolean forgotPasswordEmailVerify(String email);
+
+    boolean verifyResetPassword(String email, String otp);
+
+    boolean setNewPassword(String email, String newPassword);
 }

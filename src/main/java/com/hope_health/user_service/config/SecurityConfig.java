@@ -31,6 +31,7 @@ public class SecurityConfig {
                             .requestMatchers("/api/users/login-doctor").permitAll()
                             .requestMatchers("/api/users/verify-user").permitAll()
                             .requestMatchers("/api/users/resend-otp").permitAll()
+                            .requestMatchers("/api/users/visitor/*").permitAll()
                             .anyRequest().authenticated()
                         );
         http.cors(Customizer.withDefaults());

@@ -13,6 +13,7 @@ import com.hope_health.user_service.repo.UserRepo;
 import com.hope_health.user_service.service.UserService;
 import com.hope_health.user_service.util.EmailService;
 import com.hope_health.user_service.util.OtpGenerator;
+import com.hope_health.user_service.util.StandardResponse;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
@@ -30,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.WebClientException;
 
 import java.util.*;
 
@@ -117,6 +119,7 @@ public class UserServiceImpl implements UserService {
                 throw new EntryNotFoundException("No user found with provided email");
             }
             UserEntity user = selectedUser.get();
+            System.out.println(user);
             Otp otpObj = otpRepo.findByUserUserId(user.getUserId()).get();
 
             if(otpObj.getIsVerified()){
@@ -133,6 +136,8 @@ public class UserServiceImpl implements UserService {
                 otpRepo.save(otpObj);
                 throw new TooManyRequestException("many unsucceful attempts, new otp sent and verify ");
             }
+            System.out.println("Actual Otp is " + otpObj.getCode());
+            System.out.println("provided Otp is " + otp);
 
             if(otpObj.getCode().equals(otp)){
 
@@ -236,9 +241,6 @@ public class UserServiceImpl implements UserService {
            UserEntity user = userEntity.get();
            System.out.println("user "+user);
            user.setName(request.getName());
-           user.setEmail(request.getEmail());
-           // keycloak password updating
-           // manage keycloak user id
 
            Keycloak keycloak = null;
 
@@ -257,22 +259,11 @@ public class UserServiceImpl implements UserService {
               System.out.println("Keycloak user updating");
               existingUser.setLastName(request.getName());
               System.out.println(request.getEmail());
-              //existingUser.setUsername(request.getName());
               existingUser.setFirstName(request.getName());
               existingUser.setEnabled(true);
-              existingUser.setEmail(request.getEmail());
               existingUser.setEmailVerified(true);
-              existingUser.setCredentials(existingUser.getCredentials());
               System.out.println("to update creds");
 
-                if(request.getPassword() != null && !request.getPassword().isEmpty()){
-                    List<CredentialRepresentation> creds = new ArrayList<>();
-                    CredentialRepresentation cred = new CredentialRepresentation();
-                    cred.setTemporary(false);
-                    cred.setValue(request.getPassword());
-                    creds.add(cred);
-                    existingUser.setCredentials(creds);
-                }
 
               keycloak.realm(realm).users().get(userId).update(existingUser);
               System.out.println("Update completed");
@@ -346,20 +337,182 @@ public class UserServiceImpl implements UserService {
                     throw new RuntimeException("Failed to delete patient from patient service");
                 }
             } else if(user.getRole().equalsIgnoreCase("doctor")){
-                try{
-                    webClientConfig.webClient()
-                            .delete()
-                            .uri("http://localhost:9091/api/doctors/delete-doctor/{userId}", user.getUserId())
-                            .retrieve()
-                            .bodyToMono(Void.class)
-                            .block();
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to delete doctor from doctor service");
-                }
+//                try{
+//                    webClientConfig.webClient()
+//                            .delete()
+//                            .uri("http://localhost:9091/api/doctors/delete-doctor/{userId}", user.getUserId())
+//                            .retrieve()
+//                            .bodyToMono(Void.class)
+//                            .block();
+//                } catch (Exception e) {
+//                    throw new RuntimeException("Failed to delete doctor from doctor service");
+//                }
+                System.out.println("Ok");
             }
 
         }
 
+    }
+
+    @Override
+    public Boolean updatePassword(String userId, String password, String role) {
+
+        Optional<UserEntity> user = userRepo.findByUserId(userId);
+        if(user.isPresent()){
+
+            Keycloak keycloak = null;
+            keycloak = keycloakUtil.getKeycloakInstance();
+            UserRepresentation representation;
+            try {
+                representation = keycloak.realm(realm).users().get(userId).toRepresentation();
+            } catch (WebApplicationException e) {
+                throw new InternalServerException("Failed to connect to Keycloak: " + e.getMessage());
+            } catch (Exception e) {
+                throw new InternalServerException("Unexpected error during user lookup: " + e.getMessage());
+            }
+
+            List<CredentialRepresentation> creds = new ArrayList<>();
+            CredentialRepresentation cred = new CredentialRepresentation();
+            cred.setValue(password);
+            creds.add(cred);
+            representation.setCredentials(creds);
+            keycloak.realm(realm).users().get(userId).update(representation);
+            return true;
+
+        } else {
+            throw new EntityNotFoundException("User couldn't be found with given id " + userId);
+        }
+
+    }
+
+    @Override
+    public Boolean updateEmail(String userId, String email, String role) {
+        Optional<UserEntity> user = userRepo.findByUserId(userId);
+        if(user.isPresent()){
+
+            UserEntity userEntity = user.get();
+            userEntity.setEmail(email);
+            userRepo.save(userEntity);
+
+            Keycloak keycloak = null;
+            keycloak = keycloakUtil.getKeycloakInstance();
+            UserRepresentation representation;
+            System.out.println("Representation");
+            try {
+                representation = keycloak.realm(realm).users().get(userId).toRepresentation();
+            } catch (WebApplicationException e) {
+                throw new InternalServerException("Failed to connect to Keycloak: " + e.getMessage());
+            } catch (Exception e) {
+                throw new InternalServerException("Unexpected error during user lookup: " + e.getMessage());
+            }
+
+            representation.setEmail(email);
+
+            keycloak.realm(realm).users().get(userId).update(representation);
+            System.out.println("before web");
+            if(role.equalsIgnoreCase("patient")){
+                try {
+                    System.out.println("try webclient");
+                    webClientConfig.webClient().put().uri("http://localhost:9092/api/patients/update-email/{userId}", userId)
+                            .bodyValue(email)
+                            .retrieve().bodyToMono(StandardResponse.class).block();
+
+                } catch (WebClientException e){
+                    System.out.println("Unable to update doctor profile in pat service");
+                } catch (Exception e){
+                    System.out.println("Unexpected error during user lookup: " + e.getMessage());
+                }
+
+            } else if(role.equalsIgnoreCase("doctor")){
+                try {
+                    System.out.println("try webclient");
+                    webClientConfig.webClient().put().uri("http://localhost:9091/api/doctors/update-email/{userId}", userId)
+                            .bodyValue(email)
+                            .retrieve().bodyToMono(StandardResponse.class).block();
+
+                } catch (WebClientException e){
+                    System.out.println("Unable to update doctor profile in doc service");
+                } catch (Exception e){
+                    System.out.println("Unexpected error during user lookup: " + e.getMessage());
+                }
+            }
+
+            return true;
+
+        } else {
+            throw new EntityNotFoundException("User couldn't be found with given id " + userId);
+        }
+    }
+
+    @Override
+    public boolean forgotPasswordEmailVerify(String email) {
+        Optional<UserEntity> user = userRepo.findByEmail(email);
+
+        if(user.isEmpty()){
+            throw new EntityNotFoundException("User couldn't be found with given email " + email);
+        }
+        UserEntity userEntity = user.get();
+        if(!userEntity.getIsEmailVerified()){
+            throw new UnauthorizedException("User email is not verified, please verify your email first");
+        }
+        String otp = otpGenerator.generateOtp(4);
+        try {
+            emailService.sendEmailVerifyMail(email, userEntity.getName(), otp);
+
+            Otp otpObj = userEntity.getOtp();
+            otpObj.setCode(otp);
+            otpObj.setAttempts(0);
+            otpObj.setCreatedDate(new Date());
+            otpRepo.save(otpObj);
+
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    @Override
+    public boolean verifyResetPassword(String email, String otp) {
+        Optional<UserEntity> user = userRepo.findByEmail(email);
+        if(user.isEmpty()){
+            return false;
+        }
+        UserEntity userEntity = user.get();
+        Otp otpObj = otpRepo.findByUserUserId(userEntity.getUserId())
+                .orElseThrow(() -> new EntryNotFoundException("No OTP found for the user"));
+
+        if(otpObj.getCode().equals(otp)){
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean setNewPassword(String email, String newPassword) {
+        Optional<UserEntity> user = userRepo.findByEmail(email);
+        if(user.isEmpty()){
+            throw new EntityNotFoundException("User couldn't be found with given email " + email);
+        }
+        UserEntity userEntity = user.get();
+        Keycloak keycloak = null;
+        keycloak = keycloakUtil.getKeycloakInstance();
+        UserRepresentation representation;
+        try {
+            representation = keycloak.realm(realm).users().get(userEntity.getUserId()).toRepresentation();
+        } catch (WebApplicationException e) {
+            throw new InternalServerException("Failed to connect to Keycloak: " + e.getMessage());
+        } catch (Exception e) {
+            throw new InternalServerException("Unexpected error during user lookup: " + e.getMessage());
+        }
+
+        List<CredentialRepresentation> creds = new ArrayList<>();
+        CredentialRepresentation cred = new CredentialRepresentation();
+        cred.setValue(newPassword);
+        creds.add(cred);
+        representation.setCredentials(creds);
+        keycloak.realm(realm).users().get(userEntity.getUserId()).update(representation);
+
+        return true;
     }
 
     private UserResponseDto createUser(UserRequestDto requestDto, String role) {
@@ -373,7 +526,7 @@ public class UserServiceImpl implements UserService {
         try {
             existingUser = keycloak.realm(realm).users().search(requestDto.getEmail()).stream()
                     .findFirst().orElse(null);
-            System.out.println(existingUser);
+
 
         } catch (WebApplicationException e) {
             throw new InternalServerException("Failed to connect to Keycloak: " + e.getMessage());
@@ -438,18 +591,24 @@ public class UserServiceImpl implements UserService {
                     .user(savedUser)
                     .build();
             otpRepo.save(otp);
-            emailService.sendWelcomeMail(requestDto.getEmail(), requestDto.getName());
-            emailService.sendEmailVerifyMail(requestDto.getEmail(), requestDto.getName(), otp.getCode());
-
+            try {
+                emailService.sendWelcomeMail(requestDto.getEmail(), requestDto.getName());
+                emailService.sendEmailVerifyMail(requestDto.getEmail(), requestDto.getName(), otp.getCode());
+            } catch (Exception e) {
+                System.out.println("Email Sending Failed "+ e.getMessage());
+            }
 
             // if it's a patient, we use inter-service call to patient service to save particular patient
             // if it's a doctor we call doctor service through frontend
 
-            if(!activeStat){
+            if(role.equalsIgnoreCase("patient")){
                 try{
 
-                    System.out.println(requestDto);
+                    System.out.println("inside patient service call by web");
                     requestDto.setUserId(savedUser.getUserId());
+                    requestDto.setPassword(null);
+                    System.out.println(requestDto);
+
                     System.out.println("web client");
                     webClientConfig.webClient()
                             .post()
@@ -458,10 +617,9 @@ public class UserServiceImpl implements UserService {
                             .retrieve()
                             .bodyToMono(UserRequestDto.class)
                             .block();
-                } catch (Exception e) {
+                } catch (WebClientException e) {
                     throw new RuntimeException(e);
                 }
-
             }
 
             return toResponse(createdSystemUser);
@@ -470,10 +628,11 @@ public class UserServiceImpl implements UserService {
     }
 
     private UserRepresentation mapUserRep(UserRequestDto user, boolean activeStat) {
+        String[] nameParts = user.getName() != null ? user.getName().split("\\s+", 2) : new String[]{""};
         UserRepresentation userRep = new UserRepresentation();
         userRep.setUsername(user.getEmail());
-        userRep.setFirstName(user.getName());
-        userRep.setLastName(user.getName());
+        userRep.setFirstName(nameParts.length > 0 ? nameParts[0] : "");
+        userRep.setLastName(nameParts.length > 1 ? nameParts[1] : "");
         userRep.setEmail(user.getEmail());
         userRep.setEnabled(activeStat);
         userRep.setEmailVerified(activeStat);
