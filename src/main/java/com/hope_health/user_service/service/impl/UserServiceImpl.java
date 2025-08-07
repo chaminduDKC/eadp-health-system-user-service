@@ -327,7 +327,7 @@ public class UserServiceImpl implements UserService {
                 try{
                     var response = webClientConfig.webClient()
                             .delete()
-                            .uri("http://localhost:9092/api/patients/delete-patient/{userId}", user.getUserId())
+                            .uri("http://localhost:9092/api/patients/delete-patient/{userId}", userId)
                             .retrieve()
                             .bodyToMono(Void.class)
                             .block();
@@ -388,11 +388,20 @@ public class UserServiceImpl implements UserService {
     @Override
     public Boolean updateEmail(String userId, String email, String role) {
         Optional<UserEntity> user = userRepo.findByUserId(userId);
+        Optional<UserEntity> userExistByNewEmail = userRepo.findByEmail(email);
+        if(userExistByNewEmail.isPresent()){
+            throw new DuplicateEntryException("User with email " + email + " already exists.");
+        }
         if(user.isPresent()){
 
             UserEntity userEntity = user.get();
             userEntity.setEmail(email);
+            //--------------------
             userRepo.save(userEntity);
+            Optional<Otp> bySystemUserId = otpRepo.findByUserUserId(userEntity.getUserId());
+            Otp newOtpObj = bySystemUserId.get();
+            String otp = otpGenerator.generateOtp(4);
+            //---------------------
 
             Keycloak keycloak = null;
             keycloak = keycloakUtil.getKeycloakInstance();
@@ -406,7 +415,10 @@ public class UserServiceImpl implements UserService {
                 throw new InternalServerException("Unexpected error during user lookup: " + e.getMessage());
             }
 
+            // after changing email/ should direct to email verify and send an otp to new email.
+            // first save to the db and save an otp. then check the otp and email then save to the keycloak
             representation.setEmail(email);
+            representation.setUsername(email);
 
             keycloak.realm(realm).users().get(userId).update(representation);
             System.out.println("before web");
