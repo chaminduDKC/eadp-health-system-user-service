@@ -5,11 +5,14 @@ import com.hope_health.user_service.dto.request.UserRequestDto;
 import com.hope_health.user_service.dto.request.UserUpdateRequest;
 import com.hope_health.user_service.service.UserService;
 import com.hope_health.user_service.util.StandardResponse;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -56,6 +59,7 @@ public class UserController {
     @PostMapping("/register-doctor")
     @PreAuthorize("hasRole('admin')")
     public ResponseEntity<StandardResponse> registerDoctor(@RequestBody UserRequestDto request){
+        System.out.println(request);
         return new ResponseEntity<>(
                 StandardResponse.builder()
                         .code(201)
@@ -321,5 +325,33 @@ public class UserController {
         }
     }
 
+    @PostMapping("/visitor/verify-doctor-role")
+    public ResponseEntity<StandardResponse> verifyDoctorRole(@AuthenticationPrincipal Jwt jwt){
+            return new ResponseEntity<>(
+                    StandardResponse.builder()
+                            .code(200)
+                            .message("Doctor Role")
+                            .data(userService.verifyDoctorRole(jwt))
+                            .build(),
+                    HttpStatus.OK
+            );
+
+
+    }
+
+    @PostMapping("/visitor/verify-admin-role")
+    public ResponseEntity<StandardResponse> verifyAdminRole(@AuthenticationPrincipal Jwt jwt){
+        System.out.println(jwt.toString());
+        return new ResponseEntity<>(
+                StandardResponse.builder()
+                        .code(200)
+                        .message("Doctor Role")
+                        .data(userService.verifyAdminRole(jwt))
+                        .build(),
+                HttpStatus.OK
+        );
+
+
+    }
     //================================================================
 }

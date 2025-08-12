@@ -3,7 +3,9 @@ package com.hope_health.user_service.service;
 import com.hope_health.user_service.dto.request.UserLoginRequest;
 import com.hope_health.user_service.dto.request.UserRequestDto;
 import com.hope_health.user_service.dto.request.UserUpdateRequest;
+import com.hope_health.user_service.dto.response.AuthResponse;
 import com.hope_health.user_service.dto.response.UserResponseDto;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -32,4 +34,8 @@ public interface UserService {
     boolean verifyResetPassword(String email, String otp);
 
     boolean setNewPassword(String email, String newPassword);
+
+    AuthResponse verifyDoctorRole(Jwt jwt);
+
+    AuthResponse verifyAdminRole(Jwt jwt);
 }

@@ -1,9 +1,8 @@
 package com.hope_health.user_service.service.impl;
 import com.hope_health.user_service.config.KeycloakSecurityUtil;
 import com.hope_health.user_service.config.WebClientConfig;
-import com.hope_health.user_service.dto.request.UserLoginRequest;
-import com.hope_health.user_service.dto.request.UserRequestDto;
-import com.hope_health.user_service.dto.request.UserUpdateRequest;
+import com.hope_health.user_service.dto.request.*;
+import com.hope_health.user_service.dto.response.AuthResponse;
 import com.hope_health.user_service.dto.response.UserResponseDto;
 import com.hope_health.user_service.entity.Otp;
 import com.hope_health.user_service.entity.UserEntity;
@@ -27,6 +26,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -527,6 +527,56 @@ public class UserServiceImpl implements UserService {
         return true;
     }
 
+    @Override
+    public AuthResponse verifyDoctorRole(Jwt jwt) {
+        // resource_access
+        Map<String, Object> resourceAccess = jwt.getClaim("resource_access");
+
+        List<String> roles = new ArrayList<>();
+
+        if (resourceAccess != null && resourceAccess.containsKey(clientId)) {
+            // Get client level access
+            Map<String, Object> clientAccess = (Map<String, Object>) resourceAccess.get(clientId);
+
+            //Extract roles
+            if (clientAccess != null && clientAccess.containsKey("roles")) {
+                roles = (List<String>) clientAccess.get("roles");
+            }
+        }
+        if(roles.contains("doctor")){
+            return AuthResponse.builder()
+                    .role(roles)
+                    .build();
+        } else {
+            throw new UnauthorizedException("Unauthorized access to doctor role");
+        }
+    }
+
+    @Override
+    public AuthResponse verifyAdminRole(Jwt jwt) {
+        // resource_access
+        Map<String, Object> resourceAccess = jwt.getClaim("resource_access");
+
+        List<String> roles = new ArrayList<>();
+
+        if (resourceAccess != null && resourceAccess.containsKey(clientId)) {
+            // Get client level access
+            Map<String, Object> clientAccess = (Map<String, Object>) resourceAccess.get(clientId);
+
+            //Extract roles
+            if (clientAccess != null && clientAccess.containsKey("roles")) {
+                roles = (List<String>) clientAccess.get("roles");
+            }
+        }
+        if(roles.contains("admin")){
+            return AuthResponse.builder()
+                    .role(roles)
+                    .build();
+        } else {
+            throw new UnauthorizedException("Unauthorized access to admin role");
+        }
+    }
+
     private UserResponseDto createUser(UserRequestDto requestDto, String role) {
 
         String userId = "";
@@ -606,9 +656,44 @@ public class UserServiceImpl implements UserService {
             try {
                 emailService.sendWelcomeMail(requestDto.getEmail(), requestDto.getName());
                 emailService.sendEmailVerifyMail(requestDto.getEmail(), requestDto.getName(), otp.getCode());
+            } catch (WebClientException e){
+                throw new InternalServerException("Failed to send welcome mail: " + e.getMessage());
+
             } catch (Exception e) {
                 System.out.println("Email Sending Failed "+ e.getMessage());
             }
+            if(role.equalsIgnoreCase("doctor")){
+                try {
+                    System.out.println(requestDto);
+                    DoctorRequestDto doctorRequestDto = DoctorRequestDto.builder()
+                            .specialization(requestDto.getSpecialization())
+                            .city(requestDto.getCity())
+                            .licenceNo(requestDto.getLicenceNo())
+                            .hospital(requestDto.getHospital())
+                            .experience(requestDto.getExperience())
+                            .address(requestDto.getAddress())
+                            .phoneNumber(requestDto.getPhone())
+                            .userId(userId)
+                            .name(requestDto.getName())
+                            .email(requestDto.getEmail())
+                            .build();
+                    System.out.println(doctorRequestDto);
+                    webClientConfig
+                            .webClient()
+                            .post()
+                            .uri("http://localhost:9091/api/doctors/create-doctor")
+                            .bodyValue(doctorRequestDto)
+                            .retrieve()
+                            .bodyToMono(DoctorRequestDto.class)
+                            .block();
+                    ;
+                } catch (WebClientException e){
+                    throw new InternalServerException("Failed to save in doctor db " + e.getMessage());
+                } catch (Exception e) {
+                    throw new RuntimeException("something went wrong with connecting doctor db in webclient "+e);
+                }
+            }
+
 
             // if it's a patient, we use inter-service call to patient service to save particular patient
             // if it's a doctor we call doctor service through frontend
