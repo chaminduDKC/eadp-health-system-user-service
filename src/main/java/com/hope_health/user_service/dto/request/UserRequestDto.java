@@ -2,6 +2,7 @@ package com.hope_health.user_service.dto.request;
 
 import lombok.*;
 
+import java.time.LocalDate;
 import java.util.Date;
 @AllArgsConstructor
 @NoArgsConstructor
@@ -18,7 +19,7 @@ public class UserRequestDto {
     private String phone;
     private String age;
     private String gender;
-    private Date createdDate;
+    private LocalDate createdDate;
     private String role;
     private String specialization;
     private String experience;
