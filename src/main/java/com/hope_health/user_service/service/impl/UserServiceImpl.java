@@ -577,6 +577,30 @@ public class UserServiceImpl implements UserService {
         }
     }
 
+    @Override
+    public AuthResponse verifyPatientRole(Jwt jwt) {
+        Map<String, Object> resourceAccess = jwt.getClaim("resource_access");
+
+        List<String> roles = new ArrayList<>();
+
+        if (resourceAccess != null && resourceAccess.containsKey(clientId)) {
+            // Get client level access
+            Map<String, Object> clientAccess = (Map<String, Object>) resourceAccess.get(clientId);
+
+            //Extract roles
+            if (clientAccess != null && clientAccess.containsKey("roles")) {
+                roles = (List<String>) clientAccess.get("roles");
+            }
+        }
+        if(roles.contains("patient")){
+            return AuthResponse.builder()
+                    .role(roles)
+                    .build();
+        } else {
+            throw new UnauthorizedException("Unauthorized access to patient role");
+        }
+    }
+
     private UserResponseDto createUser(UserRequestDto requestDto, String role) {
 
         String userId = "";

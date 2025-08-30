@@ -353,5 +353,22 @@ public class UserController {
 
 
     }
+
+    @PostMapping("/visitor/verify-patient-role")
+    public ResponseEntity<StandardResponse> verifyPatientRole(@AuthenticationPrincipal Jwt jwt){
+        System.out.println(jwt.toString());
+        return new ResponseEntity<>(
+                StandardResponse.builder()
+                        .code(200)
+                        .message("Patient Role")
+                        .data(userService.verifyPatientRole(jwt))
+                        .build(),
+                HttpStatus.OK
+        );
+
+
+    }
+
+
     //================================================================
 }

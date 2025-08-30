@@ -38,4 +38,6 @@ public interface UserService {
     AuthResponse verifyDoctorRole(Jwt jwt);
 
     AuthResponse verifyAdminRole(Jwt jwt);
+
+    AuthResponse verifyPatientRole(Jwt jwt);
 }
